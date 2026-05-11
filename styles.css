@@ -1,0 +1,45 @@
+:root {
+  --board-size: min(78vw, 620px);
+  --piece-size: calc(var(--board-size) / 3);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Inter, Arial, sans-serif;
+  background: #111827;
+  color: #f8fafc;
+}
+main { max-width: 900px; margin: 1rem auto; padding: 1rem; }
+h1 { margin: 0 0 0.5rem; }
+.instructions { margin: 0 0 1rem; color: #cbd5e1; }
+.controls { display:flex; gap: 0.8rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
+button {
+  background:#3b82f6; color:white; border:none; border-radius:0.5rem; padding:0.6rem 0.9rem; cursor:pointer;
+}
+#board {
+  position: relative;
+  width: var(--board-size);
+  height: var(--board-size);
+  border: 2px solid #334155;
+  border-radius: 0.6rem;
+  margin: 0 auto;
+  background: #0f172a;
+  overflow: hidden;
+}
+.piece {
+  position: absolute;
+  width: var(--piece-size);
+  height: var(--piece-size);
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: 0.2rem;
+  cursor: pointer;
+  transition: transform 80ms linear;
+}
+.piece.selected {
+  outline: 3px solid #f59e0b;
+  z-index: 10;
+}
+#message { min-height: 1.4rem; text-align:center; margin-top: 0.9rem; color:#fbbf24; }
+video#webgazerVideoFeed { right: 10px !important; left: auto !important; width: 170px !important; border-radius: 0.4rem; }
+canvas#webgazerFaceFeedbackBox, canvas#webgazerFaceOverlay, canvas#webgazerGazeDot { right: 10px !important; left: auto !important; }

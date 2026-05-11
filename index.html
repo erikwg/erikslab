@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eye Jigsaw Puzzle</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/webgazer@2.0.1/dist/webgazer.min.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <main>
+    <h1>Eye-Controlled Jigsaw Puzzle</h1>
+    <p class="instructions">
+      1) Allow camera access. 2) Click a piece once to lock onto it. 3) Move your gaze to drag it. 4) Click again to drop.
+    </p>
+    <section class="controls">
+      <button id="startTracking">Start Eye Tracking</button>
+      <button id="shuffle">Shuffle</button>
+      <label>
+        Snap tolerance
+        <input id="tolerance" type="range" min="8" max="45" value="20" />
+      </label>
+      <span id="status">Tracking: Off</span>
+    </section>
+    <section id="board" aria-label="Puzzle board"></section>
+    <p id="message" aria-live="polite"></p>
+  </main>
+</body>
+</html>
