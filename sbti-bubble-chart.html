@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SBTi Climate Performance — Global Signatory Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg-deep:    #060b14;
+  --bg-mid:     #0b1220;
+  --bg-panel:   rgba(255,255,255,0.035);
+  --border:     rgba(255,255,255,0.07);
+  --text:       #d8dde8;
+  --text-dim:   rgba(216,221,232,0.45);
+  --accent:     #3af0b0;
+  --c-tech:     #38bdf8;
+  --c-energy:   #fb923c;
+  --c-consumer: #a3e635;
+  --c-industrial:#c084fc;
+  --c-auto:     #facc15;
+  --c-food:     #f472b6;
+  --c-retail:   #34d399;
+  --c-luxury:   #fbbf24;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  font-family: 'Space Grotesk', sans-serif;
+  background: var(--bg-deep);
+  color: var(--text);
+}
+
+/* ── Animated starfield background ── */
+#canvas-bg {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Layout ── */
+#app {
+  position: relative; z-index: 1;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+  gap: 0;
+}
+
+/* ── Header ── */
+header {
+  padding: 18px 32px 14px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(6,11,20,0.9) 0%, transparent 100%);
+}
+
+.logo-area h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #3af0b0 0%, #38bdf8 60%, #c084fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.logo-area p {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-weight: 300;
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+}
+
+.header-meta {
+  display: flex; align-items: center; gap: 24px;
+}
+
+.year-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 2.8rem;
+  font-weight: 500;
+  color: var(--accent);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  text-shadow: 0 0 30px rgba(58,240,176,0.4);
+  transition: all 0.3s ease;
+}
+
+/* ── Music button ── */
+#music-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text-dim);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+#music-btn:hover { border-color: var(--accent); color: var(--accent); }
+#music-btn.playing { border-color: var(--accent); color: var(--accent); }
+#music-btn .icon { font-size: 1rem; }
+.equalizer {
+  display: flex; align-items: flex-end; gap: 2px; height: 14px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.equalizer.active { opacity: 1; }
+.equalizer span {
+  display: block; width: 3px; background: var(--accent);
+  border-radius: 2px; animation: none;
+}
+.equalizer.active span:nth-child(1) { animation: eq1 0.6s ease infinite alternate; }
+.equalizer.active span:nth-child(2) { animation: eq2 0.5s ease infinite alternate; }
+.equalizer.active span:nth-child(3) { animation: eq3 0.7s ease infinite alternate; }
+@keyframes eq1 { from { height: 3px } to { height: 12px } }
+@keyframes eq2 { from { height: 6px } to { height: 14px } }
+@keyframes eq3 { from { height: 2px } to { height: 9px } }
+
+/* ── Main content ── */
+#main {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 0;
+  overflow: hidden;
+}
+
+/* ── Chart area ── */
+#chart-wrap {
+  position: relative;
+  padding: 16px 8px 8px 16px;
+}
+
+#chart-svg {
+  width: 100%; height: 100%;
+}
+
+.axis-label {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px;
+  fill: var(--text-dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.grid line { stroke: rgba(255,255,255,0.04); }
+.grid path { stroke: none; }
+
+.tick text {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  fill: rgba(216,221,232,0.3);
+}
+.tick line { stroke: rgba(255,255,255,0.06); }
+.domain { stroke: rgba(255,255,255,0.06); }
+
+/* ── Tooltip ── */
+#tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(10,14,26,0.96);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 0.8rem;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  min-width: 190px;
+  z-index: 100;
+}
+#tooltip .company-name {
+  font-weight: 700; font-size: 0.92rem; margin-bottom: 8px;
+}
+#tooltip .row {
+  display: flex; justify-content: space-between; gap: 16px;
+  margin-top: 4px; color: var(--text-dim); font-size: 0.75rem;
+}
+#tooltip .row span:last-child { color: var(--text); font-family: 'DM Mono', monospace; }
+
+/* ── Legend / sidebar ── */
+#sidebar {
+  border-left: 1px solid var(--border);
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+}
+
+.legend-section h3 {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.legend-item {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 7px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.legend-item.faded { opacity: 0.3; }
+.legend-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+}
+.legend-label {
+  font-size: 0.75rem;
+  color: var(--text);
+  font-weight: 400;
+}
+
+.bubble-legend {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.bubble-row {
+  display: flex; align-items: center; gap: 10px;
+}
+.bubble-circle {
+  border-radius: 50%;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  flex-shrink: 0;
+}
+.bubble-row span { font-size: 0.72rem; color: var(--text-dim); font-family: 'DM Mono', monospace; }
+
+.stat-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.stat-card .label { font-size: 0.65rem; color: var(--text-dim); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px; }
+.stat-card .value { font-size: 1.4rem; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--accent); }
+.stat-card .sub { font-size: 0.68rem; color: var(--text-dim); margin-top: 2px; }
+
+/* ── Bottom slider ── */
+#controls {
+  padding: 16px 32px 20px;
+  border-top: 1px solid var(--border);
+  background: linear-gradient(0deg, rgba(6,11,20,0.95) 0%, transparent 100%);
+}
+
+.slider-container {
+  display: flex; align-items: center; gap: 20px;
+}
+
+.year-labels {
+  display: flex; justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 0 2px;
+}
+.year-labels span {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}
+.year-labels span.active {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+#year-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent) var(--pct, 0%), rgba(255,255,255,0.1) var(--pct, 0%));
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+}
+#year-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 14px rgba(58,240,176,0.6), 0 0 4px rgba(58,240,176,0.8);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+#year-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+.play-btn {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.play-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.speed-label {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-family: 'DM Mono', monospace;
+  white-space: nowrap;
+}
+
+/* ── Quadrant labels ── */
+.quadrant-label {
+  font-size: 10px;
+  fill: rgba(255,255,255,0.06);
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+</style>
+</head>
+<body>
+
+<canvas id="canvas-bg"></canvas>
+
+<div id="app">
+  <header>
+    <div class="logo-area">
+      <h1>SBTi Climate Performance Tracker</h1>
+      <p>Science Based Targets initiative · Signatory companies 2015 – 2025</p>
+    </div>
+    <div class="header-meta">
+      <div class="year-badge" id="year-display">2015</div>
+      <button id="music-btn">
+        <span class="icon">♪</span>
+        <span id="music-label">Ambient Beat</span>
+        <div class="equalizer" id="eq">
+          <span></span><span></span><span></span>
+        </div>
+      </button>
+    </div>
+  </header>
+
+  <div id="main">
+    <div id="chart-wrap">
+      <svg id="chart-svg"></svg>
+      <div id="tooltip">
+        <div class="company-name" id="tt-name">—</div>
+        <div class="row"><span>Sector</span><span id="tt-sector">—</span></div>
+        <div class="row"><span>Emissions Reduction</span><span id="tt-emissions">—</span></div>
+        <div class="row"><span>Renewable Energy</span><span id="tt-renew">—</span></div>
+        <div class="row"><span>Market Cap</span><span id="tt-market">—</span></div>
+        <div class="row"><span>SBTi Status</span><span id="tt-status">—</span></div>
+      </div>
+    </div>
+
+    <div id="sidebar">
+      <div class="legend-section" id="sector-legend">
+        <h3>Sectors</h3>
+      </div>
+      <div class="legend-section">
+        <h3>Bubble Size</h3>
+        <div class="bubble-legend">
+          <div class="bubble-row">
+            <div class="bubble-circle" style="width:32px;height:32px"></div>
+            <span>$500B+</span>
+          </div>
+          <div class="bubble-row">
+            <div class="bubble-circle" style="width:20px;height:20px"></div>
+            <span>$100B</span>
+          </div>
+          <div class="bubble-row">
+            <div class="bubble-circle" style="width:11px;height:11px"></div>
+            <span>$20B</span>
+          </div>
+        </div>
+      </div>
+      <div class="stat-card" id="stat-count">
+        <div class="label">Signatories Shown</div>
+        <div class="value" id="stat-count-val">0</div>
+        <div class="sub">committed to SBTi targets</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Avg. Emissions Reduction</div>
+        <div class="value" id="stat-avg-emit">0%</div>
+        <div class="sub">vs 2015 baseline</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Avg. Renewable Energy</div>
+        <div class="value" id="stat-avg-renew">0%</div>
+        <div class="sub">of total energy consumed</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <div class="year-labels" id="year-labels"></div>
+    <div class="slider-container">
+      <button class="play-btn" id="play-btn">▶</button>
+      <input type="range" id="year-slider" min="2015" max="2025" step="1" value="2015">
+      <span class="speed-label">Drag to explore years</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   DATA — SBTi signatory companies
+   X: Scope 1+2 Emissions Reduction vs 2015 (%)
+   Y: Renewable Energy Share (%)
+   R: Market Cap ($B)
+   committedYear: year of SBTi commitment
+═══════════════════════════════════════════════ */
+const YEARS = d3.range(2015, 2026);
+
+const companies = [
+  /* ── Technology ── */
+  { id: "apple",     name: "Apple",           sector: "Technology",     committed: 2021,
+    base: { emit: 4,  renew: 20,  cap: 585 },
+    growEmit: [1,2,3,4,6,9,13,18,25,33,42],
+    growRenew:[20,25,35,40,60,75,80,88,95,100,100],
+    growCap:  [585,618,868,1140,1305,1300,2255,2900,2450,2870,3200] },
+
+  { id: "msft",      name: "Microsoft",       sector: "Technology",     committed: 2020,
+    base: { emit: 3,  renew: 30,  cap: 440 },
+    growEmit: [3,5,7,10,14,19,26,34,44,55,66],
+    growRenew:[30,35,40,45,60,75,100,100,100,100,100],
+    growCap:  [440,480,600,690,780,1200,1680,1900,2450,3100,2900] },
+
+  { id: "google",    name: "Alphabet",        sector: "Technology",     committed: 2019,
+    base: { emit: 5,  renew: 44,  cap: 376 },
+    growEmit: [5,8,11,15,19,25,30,37,46,56,66],
+    growRenew:[44,56,65,100,100,100,100,100,100,100,100],
+    growCap:  [376,500,620,730,860,920,1840,1960,1120,1780,2060] },
+
+  { id: "amazon",    name: "Amazon",          sector: "Technology",     committed: 2019,
+    base: { emit: 6,  renew: 10,  cap: 280 },
+    growEmit: [6,8,10,12,16,21,28,36,46,56,64],
+    growRenew:[10,15,22,28,36,46,65,85,95,100,100],
+    growCap:  [280,360,480,560,730,920,1630,1700,940,1300,2200] },
+
+  { id: "meta",      name: "Meta",            sector: "Technology",     committed: 2020,
+    base: { emit: 4,  renew: 25,  cap: 290 },
+    growEmit: [4,6,8,11,15,21,28,35,43,52,62],
+    growRenew:[25,30,35,40,56,100,100,100,100,100,100],
+    growCap:  [290,330,410,510,550,560,800,870,370,740,1400] },
+
+  /* ── Consumer Goods ── */
+  { id: "nike",      name: "Nike",            sector: "Consumer",       committed: 2015,
+    base: { emit: 8,  renew: 12,  cap: 85 },
+    growEmit: [8,12,16,21,27,33,40,47,54,61,68],
+    growRenew:[12,18,25,32,40,50,60,72,82,90,96],
+    growCap:  [85,92,88,96,110,130,155,180,170,158,165] },
+
+  { id: "unilever",  name: "Unilever",        sector: "Consumer",       committed: 2015,
+    base: { emit: 10, renew: 15,  cap: 62 },
+    growEmit: [10,14,19,24,30,37,44,51,58,64,70],
+    growRenew:[15,20,27,35,44,54,65,75,84,92,97],
+    growCap:  [62,55,52,48,58,62,58,50,44,41,48] },
+
+  { id: "loreal",    name: "L'Oréal",         sector: "Consumer",       committed: 2015,
+    base: { emit: 9,  renew: 18,  cap: 72 },
+    growEmit: [9,13,18,24,30,37,45,53,61,68,74],
+    growRenew:[18,24,32,41,52,63,74,84,92,97,100],
+    growCap:  [72,74,78,82,96,108,192,208,176,168,192] },
+
+  /* ── Food & Beverage ── */
+  { id: "nestle",    name: "Nestlé",          sector: "Food & Bev",     committed: 2015,
+    base: { emit: 12, renew: 10,  cap: 235 },
+    growEmit: [12,16,20,25,31,38,45,52,58,64,70],
+    growRenew:[10,14,19,25,32,41,52,62,72,80,88],
+    growCap:  [235,228,232,248,255,308,325,302,278,260,290] },
+
+  { id: "danone",    name: "Danone",          sector: "Food & Bev",     committed: 2015,
+    base: { emit: 11, renew: 14,  cap: 42 },
+    growEmit: [11,15,20,26,32,39,46,53,59,65,71],
+    growRenew:[14,19,26,34,43,53,64,74,82,89,95],
+    growCap:  [42,38,36,33,38,44,40,36,30,28,34] },
+
+  /* ── Industrial / Manufacturing ── */
+  { id: "siemens",   name: "Siemens",         sector: "Industrial",     committed: 2015,
+    base: { emit: 15, renew: 20,  cap: 73 },
+    growEmit: [15,20,26,32,38,45,52,59,66,72,78],
+    growRenew:[20,27,35,44,54,65,76,85,92,97,100],
+    growCap:  [73,76,72,78,92,102,115,128,122,138,162] },
+
+  { id: "schneider", name: "Schneider Elec.", sector: "Industrial",     committed: 2017,
+    base: { emit: 14, renew: 22,  cap: 39 },
+    growEmit: [14,16,19,24,30,37,45,53,61,68,75],
+    growRenew:[22,26,32,40,50,62,74,84,92,97,100],
+    growCap:  [39,42,38,40,46,58,72,88,82,105,132] },
+
+  { id: "philips",   name: "Philips",         sector: "Industrial",     committed: 2015,
+    base: { emit: 13, renew: 18,  cap: 22 },
+    growEmit: [13,17,22,28,34,41,49,56,63,69,75],
+    growRenew:[18,25,33,42,52,63,75,85,93,98,100],
+    growCap:  [22,23,22,25,28,30,31,28,22,16,18] },
+
+  /* ── Energy & Utilities ── */
+  { id: "iberdrola", name: "Iberdrola",       sector: "Energy",         committed: 2015,
+    base: { emit: 20, renew: 55,  cap: 36 },
+    growEmit: [20,25,31,37,44,52,60,68,75,81,87],
+    growRenew:[55,60,65,71,76,82,87,91,94,97,99],
+    growCap:  [36,38,42,46,52,60,68,78,72,82,88] },
+
+  { id: "enel",      name: "Enel",            sector: "Energy",         committed: 2018,
+    base: { emit: 18, renew: 40,  cap: 52 },
+    growEmit: [18,20,22,25,29,35,42,50,58,66,73],
+    growRenew:[40,44,48,53,58,65,72,79,85,91,95],
+    growCap:  [52,54,50,48,52,58,66,72,62,70,80] },
+
+  { id: "ørsted",    name: "Ørsted",          sector: "Energy",         committed: 2018,
+    base: { emit: 16, renew: 60,  cap: 12 },
+    growEmit: [16,19,22,26,31,38,48,58,68,76,83],
+    growRenew:[60,66,72,78,84,90,94,97,99,100,100],
+    growCap:  [12,14,16,18,22,26,32,40,36,28,30] },
+
+  /* ── Automotive ── */
+  { id: "bmw",       name: "BMW",             sector: "Automotive",     committed: 2017,
+    base: { emit: 22, renew: 12,  cap: 53 },
+    growEmit: [22,24,27,31,36,42,49,56,63,70,76],
+    growRenew:[12,15,19,24,30,38,48,58,68,78,86],
+    growCap:  [53,50,48,44,56,58,66,62,56,60,68] },
+
+  { id: "volvo",     name: "Volvo Cars",      sector: "Automotive",     committed: 2016,
+    base: { emit: 20, renew: 16,  cap: 18 },
+    growEmit: [20,24,28,33,39,46,53,60,67,73,79],
+    growRenew:[16,21,27,34,42,52,63,74,83,91,97],
+    growCap:  [18,18,17,18,18,16,22,28,18,14,16] },
+
+  { id: "toyota",    name: "Toyota",          sector: "Automotive",     committed: 2019,
+    base: { emit: 24, renew: 8,   cap: 188 },
+    growEmit: [24,25,27,29,32,36,41,47,54,61,68],
+    growRenew:[8, 10, 12, 16, 20, 26, 34, 44, 55, 66, 75],
+    growCap:  [188,180,168,174,195,205,252,238,208,230,258] },
+
+  /* ── Retail ── */
+  { id: "walmart",   name: "Walmart",         sector: "Retail",         committed: 2016,
+    base: { emit: 18, renew: 14,  cap: 215 },
+    growEmit: [18,22,26,31,37,43,49,56,62,68,73],
+    growRenew:[14,18,23,29,36,44,53,62,72,80,87],
+    growCap:  [215,198,218,236,248,338,408,372,350,398,460] },
+
+  { id: "ikea",      name: "IKEA",            sector: "Retail",         committed: 2018,
+    base: { emit: 16, renew: 30,  cap: 48 },
+    growEmit: [16,18,20,23,27,33,40,48,56,64,71],
+    growRenew:[30,35,40,46,54,63,72,81,89,95,99],
+    growCap:  [48,50,52,54,56,58,60,62,58,54,58] },
+
+  { id: "hm",        name: "H&M",             sector: "Retail",         committed: 2017,
+    base: { emit: 14, renew: 22,  cap: 19 },
+    growEmit: [14,16,19,23,28,34,41,48,55,62,68],
+    growRenew:[22,28,35,43,52,62,72,81,89,95,99],
+    growCap:  [19,20,18,16,18,20,22,20,16,14,15] },
+
+  /* ── Luxury ── */
+  { id: "lvmh",      name: "LVMH",            sector: "Luxury",         committed: 2019,
+    base: { emit: 10, renew: 20,  cap: 128 },
+    growEmit: [10,12,14,16,19,23,28,34,41,48,56],
+    growRenew:[20,24,28,33,39,47,56,66,75,83,90],
+    growCap:  [128,140,148,162,192,228,360,318,312,370,420] },
+
+  { id: "inditex",   name: "Inditex (Zara)",  sector: "Retail",         committed: 2016,
+    base: { emit: 13, renew: 18,  cap: 68 },
+    growEmit: [13,17,21,26,32,38,45,52,58,64,70],
+    growRenew:[18,23,29,36,44,54,64,74,83,90,96],
+    growCap:  [68,70,74,78,88,96,115,125,110,118,134] },
+
+  { id: "puma",      name: "Puma",            sector: "Consumer",       committed: 2018,
+    base: { emit: 7,  renew: 16,  cap: 4  },
+    growEmit: [7,9,11,14,18,23,29,36,43,51,58],
+    growRenew:[16,20,25,31,38,47,57,67,77,85,92],
+    growCap:  [4, 5, 5, 5, 6, 8, 10, 10, 8, 9, 10] },
+];
+
+const SECTOR_COLORS = {
+  "Technology":  "var(--c-tech)",
+  "Consumer":    "var(--c-consumer)",
+  "Industrial":  "var(--c-industrial)",
+  "Automotive":  "var(--c-auto)",
+  "Food & Bev":  "var(--c-food)",
+  "Energy":      "var(--c-energy)",
+  "Retail":      "var(--c-retail)",
+  "Luxury":      "var(--c-luxury)",
+};
+
+const SECTOR_HEX = {
+  "Technology":  "#38bdf8",
+  "Consumer":    "#a3e635",
+  "Industrial":  "#c084fc",
+  "Automotive":  "#facc15",
+  "Food & Bev":  "#f472b6",
+  "Energy":      "#fb923c",
+  "Retail":      "#34d399",
+  "Luxury":      "#fbbf24",
+};
+
+/* ═══════════════════════════════════════════════
+   STARFIELD BACKGROUND
+═══════════════════════════════════════════════ */
+(function() {
+  const cv = document.getElementById("canvas-bg");
+  const cx = cv.getContext("2d");
+  const stars = [];
+
+  function resize() { cv.width = innerWidth; cv.height = innerHeight; }
+  resize();
+  window.addEventListener("resize", resize);
+
+  for (let i = 0; i < 120; i++) {
+    stars.push({
+      x: Math.random(), y: Math.random(),
+      r: Math.random() * 1.2 + 0.2,
+      a: Math.random(),
+      speed: Math.random() * 0.0003 + 0.00005
+    });
+  }
+
+  function tick() {
+    cx.clearRect(0, 0, cv.width, cv.height);
+    for (const s of stars) {
+      s.a = Math.abs(Math.sin(Date.now() * s.speed * 3));
+      cx.beginPath();
+      cx.arc(s.x * cv.width, s.y * cv.height, s.r, 0, Math.PI * 2);
+      cx.fillStyle = `rgba(180,200,255,${s.a * 0.5})`;
+      cx.fill();
+    }
+    requestAnimationFrame(tick);
+  }
+  tick();
+})();
+
+/* ═══════════════════════════════════════════════
+   YEAR LABELS
+═══════════════════════════════════════════════ */
+const labelRow = document.getElementById("year-labels");
+YEARS.forEach(y => {
+  const s = document.createElement("span");
+  s.id = `yl-${y}`;
+  s.textContent = y;
+  labelRow.appendChild(s);
+});
+
+/* ═══════════════════════════════════════════════
+   D3 CHART
+═══════════════════════════════════════════════ */
+let currentYear = 2015;
+let hiddenSectors = new Set();
+
+const svg = d3.select("#chart-svg");
+const wrap = document.getElementById("chart-wrap");
+
+let width, height, innerW, innerH, xScale, yScale, rScale;
+let gBubbles;
+
+const margin = { top: 30, right: 30, bottom: 50, left: 60 };
+
+function getYearIdx(y) { return y - 2015; }
+
+function companyDataForYear(c, year) {
+  const i = getYearIdx(year);
+  if (year < c.committed) return null;
+  return {
+    id: c.id,
+    name: c.name,
+    sector: c.sector,
+    committed: c.committed,
+    emitReduction: c.growEmit[i],
+    renewPct: c.growRenew[i],
+    marketCap: c.growCap[i],
+  };
+}
+
+function initChart() {
+  svg.selectAll("*").remove();
+
+  const rect = wrap.getBoundingClientRect();
+  width  = rect.width;
+  height = rect.height;
+  innerW = width  - margin.left - margin.right;
+  innerH = height - margin.top  - margin.bottom;
+
+  svg.attr("viewBox", `0 0 ${width} ${height}`);
+
+  xScale = d3.scaleLinear().domain([0, 100]).range([0, innerW]);
+  yScale = d3.scaleLinear().domain([0, 100]).range([innerH, 0]);
+  rScale = d3.scaleSqrt().domain([0, 3500]).range([4, 46]);
+
+  const g = svg.append("g")
+    .attr("transform", `translate(${margin.left},${margin.top})`);
+
+  // Quadrant shading
+  const qPad = 4;
+  g.append("rect")
+    .attr("x", innerW/2 + qPad).attr("y", 0)
+    .attr("width", innerW/2 - qPad).attr("height", innerH/2 - qPad)
+    .attr("fill", "rgba(58,240,176,0.025)").attr("rx", 4);
+
+  // Quadrant labels
+  const qLabels = [
+    { x: innerW*0.25, y: innerH*0.25, text: "Leading Renewables" },
+    { x: innerW*0.75, y: innerH*0.25, text: "Climate Champions" },
+    { x: innerW*0.25, y: innerH*0.75, text: "Early Stage" },
+    { x: innerW*0.75, y: innerH*0.75, text: "Emissions Leaders" },
+  ];
+  qLabels.forEach(q => {
+    g.append("text")
+      .attr("class", "quadrant-label")
+      .attr("x", q.x).attr("y", q.y)
+      .attr("text-anchor", "middle")
+      .text(q.text);
+  });
+
+  // Grid
+  g.append("g").attr("class", "grid")
+    .call(d3.axisLeft(yScale).tickSize(-innerW).tickFormat("").ticks(5));
+  g.append("g").attr("class", "grid")
+    .attr("transform", `translate(0,${innerH})`)
+    .call(d3.axisBottom(xScale).tickSize(-innerH).tickFormat("").ticks(5));
+
+  // Axes
+  g.append("g").attr("class", "x-axis")
+    .attr("transform", `translate(0,${innerH})`)
+    .call(d3.axisBottom(xScale).ticks(5).tickFormat(d => d + "%"));
+
+  g.append("g").attr("class", "y-axis")
+    .call(d3.axisLeft(yScale).ticks(5).tickFormat(d => d + "%"));
+
+  // Axis labels
+  g.append("text")
+    .attr("class", "axis-label")
+    .attr("x", innerW / 2)
+    .attr("y", innerH + 42)
+    .attr("text-anchor", "middle")
+    .text("Scope 1+2 Emissions Reduction vs 2015 Baseline (%)");
+
+  g.append("text")
+    .attr("class", "axis-label")
+    .attr("transform", "rotate(-90)")
+    .attr("x", -innerH / 2)
+    .attr("y", -48)
+    .attr("text-anchor", "middle")
+    .text("Renewable Energy Share (%)");
+
+  // Center dividers
+  g.append("line")
+    .attr("x1", innerW/2).attr("y1", 0)
+    .attr("x2", innerW/2).attr("y2", innerH)
+    .attr("stroke", "rgba(255,255,255,0.06)")
+    .attr("stroke-dasharray", "4,4");
+
+  g.append("line")
+    .attr("x1", 0).attr("y1", innerH/2)
+    .attr("x2", innerW).attr("y2", innerH/2)
+    .attr("stroke", "rgba(255,255,255,0.06)")
+    .attr("stroke-dasharray", "4,4");
+
+  // Bubble group
+  gBubbles = g.append("g").attr("class", "bubbles");
+
+  buildLegend();
+  render(2015);
+}
+
+function render(year) {
+  const data = companies
+    .map(c => companyDataForYear(c, year))
+    .filter(d => d !== null);
+
+  // Update stats
+  document.getElementById("stat-count-val").textContent = data.length;
+  const avgEmit = d3.mean(data, d => d.emitReduction) || 0;
+  const avgRenew = d3.mean(data, d => d.renewPct) || 0;
+  document.getElementById("stat-avg-emit").textContent = avgEmit.toFixed(1) + "%";
+  document.getElementById("stat-avg-renew").textContent = avgRenew.toFixed(1) + "%";
+
+  const tt = document.getElementById("tooltip");
+
+  const circles = gBubbles.selectAll("circle.bubble")
+    .data(data, d => d.id);
+
+  // Enter
+  const enter = circles.enter().append("circle")
+    .attr("class", "bubble")
+    .attr("cx", d => xScale(d.emitReduction))
+    .attr("cy", d => yScale(d.renewPct))
+    .attr("r", 0)
+    .attr("fill", d => SECTOR_HEX[d.sector] + "bb")
+    .attr("stroke", d => SECTOR_HEX[d.sector])
+    .attr("stroke-width", 1.5)
+    .style("filter", d => `drop-shadow(0 0 8px ${SECTOR_HEX[d.sector]}88)`)
+    .style("cursor", "pointer")
+    .on("mousemove", function(event, d) {
+      const rect = wrap.getBoundingClientRect();
+      let x = event.clientX - rect.left + 14;
+      let y = event.clientY - rect.top  - 10;
+      if (x + 200 > rect.width) x = event.clientX - rect.left - 214;
+
+      tt.style.left = x + "px";
+      tt.style.top  = y + "px";
+      tt.style.opacity = "1";
+      document.getElementById("tt-name").textContent = d.name;
+      document.getElementById("tt-name").style.color = SECTOR_HEX[d.sector];
+      document.getElementById("tt-sector").textContent = d.sector;
+      document.getElementById("tt-emissions").textContent = d.emitReduction.toFixed(1) + "%";
+      document.getElementById("tt-renew").textContent = d.renewPct.toFixed(1) + "%";
+      document.getElementById("tt-market").textContent = "$" + d.marketCap.toFixed(0) + "B";
+      document.getElementById("tt-status").textContent = "Committed " + d.committed;
+
+      d3.select(this).attr("stroke-width", 2.5).attr("r", rScale(d.marketCap) * 1.08);
+    })
+    .on("mouseleave", function(event, d) {
+      tt.style.opacity = "0";
+      d3.select(this).attr("stroke-width", 1.5).attr("r", rScale(d.marketCap));
+    });
+
+  // Label group enter
+  const labelEnter = gBubbles.selectAll("text.blabel")
+    .data(data, d => d.id)
+    .enter().append("text")
+    .attr("class", "blabel")
+    .attr("x", d => xScale(d.emitReduction))
+    .attr("y", d => yScale(d.renewPct))
+    .attr("text-anchor", "middle")
+    .attr("dominant-baseline", "middle")
+    .attr("pointer-events", "none")
+    .style("fill", "#fff")
+    .style("font-size", "9px")
+    .style("font-family", "'Space Grotesk', sans-serif")
+    .style("font-weight", "600")
+    .style("opacity", "0");
+
+  // Merge & transition
+  enter.merge(circles)
+    .transition().duration(700).ease(d3.easeCubicInOut)
+    .attr("cx", d => xScale(d.emitReduction))
+    .attr("cy", d => yScale(d.renewPct))
+    .attr("r",  d => {
+      const hidden = hiddenSectors.has(d.sector);
+      return hidden ? 0 : rScale(d.marketCap);
+    })
+    .attr("fill",   d => SECTOR_HEX[d.sector] + "bb")
+    .attr("stroke", d => SECTOR_HEX[d.sector]);
+
+  gBubbles.selectAll("text.blabel")
+    .data(data, d => d.id)
+    .merge(labelEnter)
+    .transition().duration(700).ease(d3.easeCubicInOut)
+    .attr("x", d => xScale(d.emitReduction))
+    .attr("y", d => yScale(d.renewPct))
+    .style("opacity", d => {
+      if (hiddenSectors.has(d.sector)) return 0;
+      return rScale(d.marketCap) > 18 ? 0.85 : 0;
+    })
+    .text(d => d.name.split(" ")[0]);
+
+  // Exit
+  circles.exit()
+    .transition().duration(400)
+    .attr("r", 0)
+    .remove();
+
+  gBubbles.selectAll("text.blabel")
+    .data(data, d => d.id)
+    .exit()
+    .transition().duration(400)
+    .style("opacity", 0)
+    .remove();
+}
+
+function buildLegend() {
+  const container = document.getElementById("sector-legend");
+  const existing = container.querySelector("h3");
+  container.innerHTML = "";
+  container.appendChild(existing || Object.assign(document.createElement("h3"), { textContent: "Sectors" }));
+
+  Object.entries(SECTOR_HEX).forEach(([sector, color]) => {
+    const item = document.createElement("div");
+    item.className = "legend-item";
+    item.dataset.sector = sector;
+
+    const dot = document.createElement("div");
+    dot.className = "legend-dot";
+    dot.style.background = color;
+    dot.style.color = color;
+
+    const label = document.createElement("span");
+    label.className = "legend-label";
+    label.textContent = sector;
+
+    item.appendChild(dot);
+    item.appendChild(label);
+    item.addEventListener("click", () => toggleSector(sector, item));
+    container.appendChild(item);
+  });
+}
+
+function toggleSector(sector, el) {
+  if (hiddenSectors.has(sector)) {
+    hiddenSectors.delete(sector);
+    el.classList.remove("faded");
+  } else {
+    hiddenSectors.add(sector);
+    el.classList.add("faded");
+  }
+  render(currentYear);
+}
+
+/* ═══════════════════════════════════════════════
+   SLIDER + PLAYBACK
+═══════════════════════════════════════════════ */
+const slider = document.getElementById("year-slider");
+const playBtn = document.getElementById("play-btn");
+let playInterval = null;
+
+function setYear(y) {
+  currentYear = y;
+  slider.value = y;
+  document.getElementById("year-display").textContent = y;
+
+  const pct = ((y - 2015) / (2025 - 2015)) * 100;
+  slider.style.setProperty("--pct", pct + "%");
+
+  YEARS.forEach(yr => {
+    const el = document.getElementById(`yl-${yr}`);
+    if (el) el.className = yr === y ? "active" : "";
+  });
+
+  render(y);
+}
+
+slider.addEventListener("input", () => setYear(+slider.value));
+
+playBtn.addEventListener("click", () => {
+  if (playInterval) {
+    clearInterval(playInterval);
+    playInterval = null;
+    playBtn.textContent = "▶";
+  } else {
+    if (currentYear >= 2025) setYear(2015);
+    playBtn.textContent = "⏸";
+    playInterval = setInterval(() => {
+      if (currentYear >= 2025) {
+        clearInterval(playInterval);
+        playInterval = null;
+        playBtn.textContent = "▶";
+      } else {
+        setYear(currentYear + 1);
+      }
+    }, 1200);
+  }
+});
+
+/* ═══════════════════════════════════════════════
+   WEB AUDIO AMBIENT BEAT ENGINE
+═══════════════════════════════════════════════ */
+let audioCtx = null;
+let musicPlaying = false;
+let masterGain, reverbNode, beatSchedulerId;
+let nextBeatTime = 0;
+const BPM = 78;
+const beatLen = 60 / BPM;
+let beatStep = 0;
+let beatWorker = null;
+
+// Chord progression: Am - F - C - G (minor, atmospheric)
+const chords = [
+  [220.00, 261.63, 329.63],  // Am
+  [174.61, 220.00, 261.63],  // F
+  [130.81, 164.81, 196.00],  // C
+  [196.00, 246.94, 293.66],  // G
+];
+
+function createReverb(ctx) {
+  const len = ctx.sampleRate * 3.5;
+  const impulse = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = impulse.getChannelData(ch);
+    for (let i = 0; i < len; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.4);
+    }
+  }
+  const node = ctx.createConvolver();
+  node.buffer = impulse;
+  return node;
+}
+
+function playKick(ctx, time, gain = 0.7) {
+  const osc = ctx.createOscillator();
+  const gainNode = ctx.createGain();
+  osc.connect(gainNode); gainNode.connect(masterGain);
+  osc.frequency.setValueAtTime(160, time);
+  osc.frequency.exponentialRampToValueAtTime(40, time + 0.12);
+  gainNode.gain.setValueAtTime(gain, time);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+  osc.start(time); osc.stop(time + 0.35);
+}
+
+function playSnare(ctx, time, gain = 0.3) {
+  const bufLen = ctx.sampleRate * 0.12;
+  const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const gainNode = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
+  filter.type = "bandpass"; filter.frequency.value = 3000; filter.Q.value = 0.5;
+  src.connect(filter); filter.connect(gainNode); gainNode.connect(masterGain);
+  gainNode.gain.setValueAtTime(gain, time);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+  src.start(time); src.stop(time + 0.2);
+}
+
+function playHihat(ctx, time, gain = 0.1, open = false) {
+  const bufLen = ctx.sampleRate * (open ? 0.2 : 0.04);
+  const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const gainNode = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
+  filter.type = "highpass"; filter.frequency.value = 8000;
+  src.connect(filter); filter.connect(gainNode); gainNode.connect(masterGain);
+  gainNode.gain.setValueAtTime(gain, time);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, time + (open ? 0.2 : 0.05));
+  src.start(time); src.stop(time + (open ? 0.25 : 0.08));
+}
+
+function playPad(ctx, time, dur, freqs) {
+  freqs.forEach((freq, i) => {
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc1.type = "sine"; osc2.type = "triangle";
+    osc1.frequency.value = freq;
+    osc2.frequency.value = freq * 1.003; // slight detune
+    osc1.connect(g); osc2.connect(g);
+    g.connect(reverbNode);
+    g.gain.setValueAtTime(0, time);
+    g.gain.linearRampToValueAtTime(0.06 - i * 0.01, time + 1.2);
+    g.gain.linearRampToValueAtTime(0.04 - i * 0.008, time + dur - 1);
+    g.gain.linearRampToValueAtTime(0, time + dur);
+    osc1.start(time); osc1.stop(time + dur);
+    osc2.start(time); osc2.stop(time + dur);
+  });
+}
+
+function playBass(ctx, time, freq, dur) {
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass"; filter.frequency.value = 200;
+  osc.type = "triangle";
+  osc.frequency.value = freq / 2;
+  osc.connect(filter); filter.connect(g); g.connect(masterGain);
+  g.gain.setValueAtTime(0, time);
+  g.gain.linearRampToValueAtTime(0.22, time + 0.08);
+  g.gain.linearRampToValueAtTime(0.12, time + dur - 0.1);
+  g.gain.linearRampToValueAtTime(0, time + dur);
+  osc.start(time); osc.stop(time + dur + 0.05);
+}
+
+let chordIdx = 0;
+let lastChordBeat = -1;
+
+function scheduleBeats() {
+  if (!musicPlaying || !audioCtx) return;
+  const ahead = 0.12;
+  const now = audioCtx.currentTime;
+
+  while (nextBeatTime < now + ahead) {
+    const t = nextBeatTime;
+    const step = beatStep % 16;
+
+    // Kick pattern: 0, 4, 8 (quarters)
+    if (step === 0) playKick(audioCtx, t, 0.75);
+    if (step === 8) playKick(audioCtx, t, 0.55);
+    if (step === 6) playKick(audioCtx, t, 0.3);
+
+    // Snare: step 4 and 12
+    if (step === 4 || step === 12) playSnare(audioCtx, t, 0.28);
+
+    // Hi-hat: every 2 steps (8th notes), open on 6
+    if (step % 2 === 0) playHihat(audioCtx, t, 0.08, step === 6);
+
+    // Pad chord change every 16 steps (one bar)
+    if (step === 0) {
+      if (lastChordBeat !== beatStep) {
+        lastChordBeat = beatStep;
+        playPad(audioCtx, t, beatLen * 16, chords[chordIdx % chords.length]);
+        // Bass note
+        playBass(audioCtx, t, chords[chordIdx % chords.length][0], beatLen * 8);
+        chordIdx++;
+      }
+    }
+
+    nextBeatTime += beatLen / 4; // 16th note grid
+    beatStep++;
+  }
+
+  beatSchedulerId = setTimeout(scheduleBeats, 25);
+}
+
+function startMusic() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.45;
+  reverbNode = createReverb(audioCtx);
+  const reverbGain = audioCtx.createGain();
+  reverbGain.gain.value = 0.5;
+  reverbNode.connect(reverbGain);
+  reverbGain.connect(masterGain);
+  masterGain.connect(audioCtx.destination);
+
+  nextBeatTime = audioCtx.currentTime + 0.1;
+  beatStep = 0;
+  chordIdx = 0;
+  lastChordBeat = -1;
+  musicPlaying = true;
+  scheduleBeats();
+}
+
+function stopMusic() {
+  musicPlaying = false;
+  clearTimeout(beatSchedulerId);
+  if (masterGain) {
+    masterGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+  }
+}
+
+document.getElementById("music-btn").addEventListener("click", () => {
+  const btn = document.getElementById("music-btn");
+  const eq  = document.getElementById("eq");
+  const lbl = document.getElementById("music-label");
+  if (!musicPlaying) {
+    startMusic();
+    btn.classList.add("playing");
+    eq.classList.add("active");
+    lbl.textContent = "Ambient Beat";
+  } else {
+    stopMusic();
+    btn.classList.remove("playing");
+    eq.classList.remove("active");
+    lbl.textContent = "Ambient Beat";
+  }
+});
+
+/* ═══════════════════════════════════════════════
+   INIT + RESIZE
+═══════════════════════════════════════════════ */
+initChart();
+setYear(2015);
+
+let resizeTimer;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    initChart();
+    setYear(currentYear);
+  }, 150);
+});
+</script>
+</body>
+</html>
