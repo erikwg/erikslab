@@ -1,0 +1,13 @@
+{
+  "name": "space-explorer",
+  "version": "1.0.0",
+  "description": "Line-drawn infinite procedural space explorer with multiplayer",
+  "main": "server.js",
+  "scripts": {
+    "server": "node server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
